@@ -70,19 +70,20 @@ def load_from_google_sheets():
         return None
     
     try:
-        # HARDCODED VALUES - easier than fighting TOML
+        # HARDCODED VALUES
         SPREADSHEET_ID = "1rWZAD_Oy_tuypTYgTFaHClC9keg5cX0VJhUjQtk-LOw"
-        SHEET_NAME = "Planning_Applications"
         
         # Check for service account
         if "gcp_service_account" not in st.secrets:
             st.error("Missing 'gcp_service_account' in secrets")
             return None
         
-        st.sidebar.info(f"📊 Loading from Google Sheets...")
-        st.sidebar.caption(f"Sheet: {SHEET_NAME}")
+        st.sidebar.info(f"📊 Connecting to Google Sheets...")
         
         credentials_dict = dict(st.secrets["gcp_service_account"])
+        
+        # Show which email we're using
+        st.sidebar.caption(f"Service account: {credentials_dict.get('client_email', 'Unknown')}")
         
         credentials = service_account.Credentials.from_service_account_info(
             credentials_dict,
@@ -90,18 +91,52 @@ def load_from_google_sheets():
         )
         
         service = build('sheets', 'v4', credentials=credentials)
-        result = service.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID, 
-            range=SHEET_NAME
-        ).execute()
         
-        values = result.get('values', [])
-        if not values:
-            st.error(f"No data found in sheet '{SHEET_NAME}'")
+        # First, try to get the spreadsheet metadata to see all sheet names
+        try:
+            spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
+            sheets = spreadsheet.get('sheets', [])
+            sheet_names = [sheet['properties']['title'] for sheet in sheets]
+            
+            st.sidebar.success(f"✅ Connected! Found {len(sheet_names)} sheets:")
+            for name in sheet_names:
+                st.sidebar.caption(f"  - {name}")
+            
+            # Try each sheet name
+            for sheet_name in sheet_names:
+                try:
+                    result = service.spreadsheets().values().get(
+                        spreadsheetId=SPREADSHEET_ID, 
+                        range=sheet_name
+                    ).execute()
+                    
+                    values = result.get('values', [])
+                    if values and len(values) > 1:
+                        st.sidebar.success(f"✅ Loaded {len(values)-1:,} rows from '{sheet_name}'")
+                        return pd.DataFrame(values[1:], columns=values[0])
+                except Exception as e:
+                    st.sidebar.warning(f"Skipping '{sheet_name}': {str(e)}")
+                    continue
+            
+            st.error("No readable data found in any sheet")
             return None
-        
-        st.sidebar.success(f"✅ Loaded {len(values)-1:,} rows")
-        return pd.DataFrame(values[1:], columns=values[0])
+            
+        except Exception as e:
+            # If we can't even read metadata, it's a permissions issue
+            st.error("❌ Permission Error")
+            st.error(f"Cannot access spreadsheet. Make sure you shared it with:")
+            st.code(credentials_dict.get('client_email', 'Unknown'))
+            st.info("""
+            Steps to fix:
+            1. Open your Google Sheet
+            2. Click Share (top right)
+            3. Add: planning@realestate-466709.iam.gserviceaccount.com
+            4. Give it "Viewer" access
+            5. Click Done
+            6. Wait 1-2 minutes, then reboot this app
+            """)
+            st.exception(e)
+            return None
         
     except Exception as e:
         st.error(f"Error loading Google Sheets: {str(e)}")
