@@ -70,26 +70,53 @@ def load_from_google_sheets():
         return None
     
     try:
+        # Debug: Show what secrets are available
+        st.sidebar.write("Debug - Available secrets:", list(st.secrets.keys()))
+        
         # Check for required secrets
         if "gcp_service_account" not in st.secrets:
             st.error("Missing 'gcp_service_account' in secrets")
             return None
         
-        if "spreadsheet_id" not in st.secrets:
+        # Try different ways to access spreadsheet_id
+        spreadsheet_id = None
+        
+        # Method 1: Direct access
+        if "spreadsheet_id" in st.secrets:
+            spreadsheet_id = st.secrets["spreadsheet_id"]
+            st.sidebar.success(f"Found spreadsheet_id (method 1): {spreadsheet_id[:20]}...")
+        
+        # Method 2: Try as string key
+        elif hasattr(st.secrets, 'spreadsheet_id'):
+            spreadsheet_id = st.secrets.spreadsheet_id
+            st.sidebar.success(f"Found spreadsheet_id (method 2): {spreadsheet_id[:20]}...")
+        
+        # Method 3: Try get with default
+        else:
+            spreadsheet_id = st.secrets.get("spreadsheet_id", None)
+            if spreadsheet_id:
+                st.sidebar.success(f"Found spreadsheet_id (method 3): {spreadsheet_id[:20]}...")
+        
+        if not spreadsheet_id:
             st.error("Missing 'spreadsheet_id' in secrets")
             st.info("""
-            Add this to your Streamlit Cloud secrets:
+            Add this to your Streamlit Cloud secrets (at root level, NOT inside gcp_service_account):
             
-            spreadsheet_id = "YOUR_SPREADSHEET_ID_HERE"
-            
-            Find your spreadsheet ID in the URL:
-            https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit
+            spreadsheet_id = "1rWZAD_Oy_tuypTYgTFaHClC9keg5cX0VJhUjQtk-LOw"
+            sheet_name = "Planning_Applications"
             """)
             return None
         
+        # Get sheet name
+        sheet_name = "Planning_Applications"  # Default
+        if "sheet_name" in st.secrets:
+            sheet_name = st.secrets["sheet_name"]
+        elif hasattr(st.secrets, 'sheet_name'):
+            sheet_name = st.secrets.sheet_name
+        
+        st.sidebar.info(f"Loading sheet: {sheet_name}")
+        
         credentials_dict = dict(st.secrets["gcp_service_account"])
-        spreadsheet_id = st.secrets["spreadsheet_id"]
-        sheet_name = st.secrets.get("sheet_name", "Sheet1")
         
         credentials = service_account.Credentials.from_service_account_info(
             credentials_dict,
@@ -103,12 +130,15 @@ def load_from_google_sheets():
         
         values = result.get('values', [])
         if not values:
+            st.error(f"No data found in sheet '{sheet_name}'")
             return None
-            
+        
+        st.sidebar.success(f"✅ Loaded {len(values)-1} rows from Google Sheets")
         return pd.DataFrame(values[1:], columns=values[0])
         
     except Exception as e:
         st.error(f"Error loading Google Sheets: {str(e)}")
+        st.exception(e)  # Show full traceback
         return None
 
 @st.cache_data
