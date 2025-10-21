@@ -626,12 +626,280 @@ def main():
         with col3:
             st.metric("As % of Loan", f"{(total_interest/loan_amount*100):.1f}%")
     
-    # Additional pages would go here (opportunities, market intelligence, etc.)
-    # ... (keeping the rest of the pages from previous version)
+    elif page == "🎯 Opportunities":
+        analyze_opportunities(df)
+    elif page == "🏛️ Market Intelligence":
+        analyze_market_intelligence(df)
+    elif page == "⚠️ Risk Assessment":
+        analyze_risk(df)
+    elif page == "🗄️ Database":
+        show_database_view(df)
     
     st.sidebar.markdown("---")
     st.sidebar.caption("Planning Intelligence Pro v2.1")
     st.sidebar.caption("Powered by AI & Real-time Data")
+
+# Additional Page Functions
+
+def analyze_opportunities(df):
+    """Deep opportunity analysis"""
+    st.markdown("## 🎯 High-Value Opportunities")
+    
+    # Filter high-value approved applications
+    high_value = df[
+        (df['Value_Score'] >= 60) & 
+        (df['Status_Category'] == 'Approved')
+    ].sort_values('Value_Score', ascending=False)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("High-Value Approved", len(high_value))
+    with col2:
+        avg_units = high_value['Unit_Count'].mean()
+        st.metric("Avg Units", f"{avg_units:.1f}" if avg_units > 0 else "N/A")
+    with col3:
+        residential_pct = (high_value['Is_Residential'].sum() / len(high_value) * 100) if len(high_value) > 0 else 0
+        st.metric("Residential %", f"{residential_pct:.0f}%")
+    
+    st.markdown("### Top 15 Investment Opportunities")
+    
+    for idx, row in high_value.head(15).iterrows():
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            value_class = "high-value" if row['Value_Score'] >= 80 else "medium-value"
+            st.markdown(f"""
+            <div class='opportunity-card {value_class}'>
+                <strong>{row['Proposal'][:120]}...</strong><br>
+                <small>📍 {row['LPA']} | {row['Use_Class_Hint']} | {row['Proposal_Type']}</small><br>
+                <small>✓ Approved: {row['Decision_Date'].strftime('%Y-%m-%d') if pd.notna(row['Decision_Date']) else 'N/A'}</small>
+            </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.metric("Value Score", f"{row['Value_Score']:.0f}/100")
+    
+    # Proposal type breakdown
+    st.markdown("### Proposal Types Distribution")
+    prop_type_counts = df['Proposal_Type'].value_counts()
+    fig = px.pie(values=prop_type_counts.values, names=prop_type_counts.index, hole=0.4)
+    fig.update_traces(textposition='inside', textinfo='percent+label')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Residential vs Commercial
+    col1, col2 = st.columns(2)
+    with col1:
+        res_commercial = pd.DataFrame({
+            'Type': ['Residential', 'Commercial', 'Mixed Use'],
+            'Count': [df['Is_Residential'].sum(), df['Is_Commercial'].sum(), df['Is_Mixed_Use'].sum()]
+        })
+        fig = px.bar(res_commercial, x='Type', y='Count', title='Development Categories')
+        fig.update_traces(marker_color=['#34C759', '#007AFF', '#FF9500'])
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # High-density opportunities (10+ units)
+        high_density = df[df['Unit_Count'] >= 10].groupby('Status_Category').size().reset_index(name='Count')
+        fig = px.bar(high_density, x='Status_Category', y='Count', 
+                     title='High-Density Projects (10+ Units) by Status')
+        st.plotly_chart(fig, use_container_width=True)
+
+def analyze_market_intelligence(df):
+    """Comprehensive market intelligence"""
+    st.markdown("## 📊 Market Intelligence")
+    
+    # LPA Performance Analysis
+    st.markdown("### Local Planning Authority Performance")
+    
+    lpa_analysis = df.groupby('LPA').agg({
+        'App_Ref': 'count',
+        'Status_Category': lambda x: (x == 'Approved').sum(),
+        'Processing_Days': 'median'
+    }).reset_index()
+    lpa_analysis.columns = ['LPA', 'Total_Apps', 'Approved', 'Median_Days']
+    lpa_analysis['Approval_Rate'] = (lpa_analysis['Approved'] / lpa_analysis['Total_Apps'] * 100).round(1)
+    lpa_analysis = lpa_analysis.sort_values('Total_Apps', ascending=False).head(20)
+    
+    # Most active and development-friendly LPAs
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("**Most Active LPAs**")
+        fig = px.bar(lpa_analysis.head(10), x='Total_Apps', y='LPA', orientation='h',
+                     color='Approval_Rate', color_continuous_scale='RdYlGn',
+                     title='Top 10 Most Active Planning Authorities')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.markdown("**Most Development-Friendly LPAs**")
+        friendly = lpa_analysis[lpa_analysis['Total_Apps'] >= 20].sort_values('Approval_Rate', ascending=False).head(10)
+        fig = px.bar(friendly, x='Approval_Rate', y='LPA', orientation='h',
+                     title='Highest Approval Rates (min 20 apps)')
+        fig.update_traces(marker_color='#34C759')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Processing time analysis
+    st.markdown("### Decision Timeline Analysis")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        avg_processing = df.groupby('LPA')['Processing_Days'].median().sort_values().head(10)
+        fig = px.bar(x=avg_processing.values, y=avg_processing.index, orientation='h',
+                     title='Fastest LPAs (Median Processing Days)',
+                     labels={'x': 'Days', 'y': 'LPA'})
+        fig.update_traces(marker_color='#007AFF')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        # Overall processing time distribution
+        processing_clean = df[df['Processing_Days'].notna() & (df['Processing_Days'] > 0) & (df['Processing_Days'] < 500)]
+        fig = px.histogram(processing_clean, x='Processing_Days', nbins=40,
+                          title='Processing Time Distribution (Days)')
+        fig.add_vline(x=processing_clean['Processing_Days'].median(), line_dash="dash", 
+                     line_color="red", annotation_text="Median")
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Seasonal patterns
+    st.markdown("### Seasonal Patterns")
+    
+    if df['Application_Month'].notna().any():
+        monthly_apps = df.groupby('Application_Month').size().reset_index(name='Count')
+        monthly_apps['Month'] = monthly_apps['Application_Month'].astype(str)
+        
+        fig = px.line(monthly_apps, x='Month', y='Count', 
+                     title='Application Submissions Over Time',
+                     markers=True)
+        fig.update_traces(line_color='#007AFF', line_width=3)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Month of year analysis
+        df['Month_Name'] = df['Valid_Date'].dt.month_name()
+        monthly_pattern = df['Month_Name'].value_counts().reindex([
+            'January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'
+        ]).fillna(0)
+        
+        fig = px.bar(x=monthly_pattern.index, y=monthly_pattern.values,
+                    title='Applications by Month (All Years Combined)')
+        st.plotly_chart(fig, use_container_width=True)
+
+def analyze_risk(df):
+    """Risk assessment and rejection analysis"""
+    st.markdown("## ⚠️ Risk Assessment")
+    
+    # Overall risk metrics
+    total = len(df)
+    rejected = len(df[df['Status_Category'] == 'Rejected'])
+    rejection_rate = (rejected / total * 100) if total > 0 else 0
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Overall Rejection Rate", f"{rejection_rate:.1f}%")
+    with col2:
+        withdrawn = len(df[df['Status_Category'] == 'Withdrawn'])
+        st.metric("Withdrawal Rate", f"{(withdrawn/total*100):.1f}%")
+    with col3:
+        avg_risk_time = df[df['Status_Category'] == 'Rejected']['Processing_Days'].median()
+        st.metric("Avg Time to Rejection", f"{avg_risk_time:.0f} days" if pd.notna(avg_risk_time) else "N/A")
+    
+    # Rejection by LPA
+    st.markdown("### Rejection Rates by Planning Authority")
+    lpa_rejection = df.groupby('LPA').agg({
+        'App_Ref': 'count',
+        'Status_Category': lambda x: (x == 'Rejected').sum()
+    }).reset_index()
+    lpa_rejection.columns = ['LPA', 'Total', 'Rejected']
+    lpa_rejection['Rejection_Rate'] = (lpa_rejection['Rejected'] / lpa_rejection['Total'] * 100).round(1)
+    lpa_rejection = lpa_rejection[lpa_rejection['Total'] >= 10].sort_values('Rejection_Rate', ascending=False).head(15)
+    
+    fig = px.bar(lpa_rejection, x='Rejection_Rate', y='LPA', orientation='h',
+                 title='Highest Rejection Rates by LPA (min 10 apps)',
+                 color='Rejection_Rate', color_continuous_scale='Reds')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Rejection by use class
+    st.markdown("### Rejection Rates by Use Class")
+    use_rejection = df.groupby('Use_Class_Hint').agg({
+        'App_Ref': 'count',
+        'Status_Category': lambda x: (x == 'Rejected').sum()
+    }).reset_index()
+    use_rejection.columns = ['Use_Class', 'Total', 'Rejected']
+    use_rejection['Rejection_Rate'] = (use_rejection['Rejected'] / use_rejection['Total'] * 100).round(1)
+    use_rejection = use_rejection[use_rejection['Total'] >= 5].sort_values('Rejection_Rate', ascending=False).head(10)
+    
+    fig = px.bar(use_rejection, x='Rejection_Rate', y='Use_Class', orientation='h',
+                 color='Rejection_Rate', color_continuous_scale='Reds')
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Challenging areas
+    st.markdown("### Challenging Planning Environments")
+    st.markdown("""
+    <div class='alert'>
+        <strong>⚠️ High-Risk LPAs:</strong> Consider additional due diligence or contingency planning for applications in these authorities.
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.dataframe(
+        lpa_rejection[['LPA', 'Total', 'Rejected', 'Rejection_Rate']],
+        use_container_width=True
+    )
+
+def show_database_view(df):
+    """Interactive database with drill-down"""
+    st.markdown("## 🗄️ Planning Database")
+    
+    # Advanced filters
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        lpa_filter = st.multiselect("Planning Authority", options=sorted(df['LPA'].dropna().unique()))
+    with col2:
+        status_filter = st.multiselect("Status", options=sorted(df['Status_Category'].unique()))
+    with col3:
+        type_filter = st.multiselect("Proposal Type", options=sorted(df['Proposal_Type'].unique()))
+    with col4:
+        min_value_score = st.slider("Min Value Score", 0, 100, 0)
+    
+    # Apply filters
+    filtered = df.copy()
+    if lpa_filter:
+        filtered = filtered[filtered['LPA'].isin(lpa_filter)]
+    if status_filter:
+        filtered = filtered[filtered['Status_Category'].isin(status_filter)]
+    if type_filter:
+        filtered = filtered[filtered['Proposal_Type'].isin(type_filter)]
+    filtered = filtered[filtered['Value_Score'] >= min_value_score]
+    
+    st.markdown(f"**Showing {len(filtered):,} of {len(df):,} applications**")
+    
+    # Display detailed table
+    display_cols = ['App_Ref', 'LPA', 'Proposal', 'Proposal_Type', 'Status_Category', 
+                   'Value_Score', 'Unit_Count', 'Valid_Date', 'Decision_Date', 'Processing_Days']
+    available_cols = [col for col in display_cols if col in filtered.columns]
+    
+    st.dataframe(
+        filtered[available_cols].sort_values('Value_Score', ascending=False),
+        use_container_width=True,
+        height=500
+    )
+    
+    # Download
+    csv = filtered.to_csv(index=False)
+    st.download_button("📥 Download Filtered Data", csv, "filtered_planning_data.csv", "text/csv")
+    
+    # Drill-down analysis
+    if len(filtered) > 0:
+        st.markdown("### Quick Stats on Filtered Data")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Apps", len(filtered))
+        with col2:
+            approval_rate = (filtered['Status_Category'] == 'Approved').sum() / len(filtered) * 100
+            st.metric("Approval Rate", f"{approval_rate:.1f}%")
+        with col3:
+            avg_units = filtered['Unit_Count'].mean()
+            st.metric("Avg Units", f"{avg_units:.1f}" if avg_units > 0 else "N/A")
+        with col4:
+            median_days = filtered['Processing_Days'].median()
+            st.metric("Median Processing", f"{median_days:.0f} days" if pd.notna(median_days) else "N/A")
 
 if __name__ == "__main__":
     main()

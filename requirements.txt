@@ -1,0 +1,22 @@
+# Core dependencies
+streamlit>=1.28.0
+pandas>=1.5.0,<2.0.0
+plotly>=5.17.0
+numpy>=1.21.0,<1.25.0
+
+# Google Sheets integration - Python 3.8 compatible versions
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# API requests
+requests>=2.31.0
+
+# OpenSSL - Python 3.8 compatible versions
+pyOpenSSL==22.1.0
+cryptography==38.0.4
+
+# Additional dependencies for stability
+urllib3>=1.26.0,<2.0.0
+certifi>=2023.7.22
