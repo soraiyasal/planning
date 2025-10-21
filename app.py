@@ -70,6 +70,23 @@ def load_from_google_sheets():
         return None
     
     try:
+        # Check for required secrets
+        if "gcp_service_account" not in st.secrets:
+            st.error("Missing 'gcp_service_account' in secrets")
+            return None
+        
+        if "spreadsheet_id" not in st.secrets:
+            st.error("Missing 'spreadsheet_id' in secrets")
+            st.info("""
+            Add this to your Streamlit Cloud secrets:
+            
+            spreadsheet_id = "YOUR_SPREADSHEET_ID_HERE"
+            
+            Find your spreadsheet ID in the URL:
+            https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit
+            """)
+            return None
+        
         credentials_dict = dict(st.secrets["gcp_service_account"])
         spreadsheet_id = st.secrets["spreadsheet_id"]
         sheet_name = st.secrets.get("sheet_name", "Sheet1")
