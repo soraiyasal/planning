@@ -146,23 +146,73 @@ def load_from_google_sheets():
 @st.cache_data
 def analyze_data(df):
     """Comprehensive data analysis"""
-    df['Valid_Date'] = pd.to_datetime(df['Valid_Date'], errors='coerce')
-    df['Decision_Date'] = pd.to_datetime(df['Decision_Date'], errors='coerce')
-    df['Run_Date'] = pd.to_datetime(df['Run_Date'], errors='coerce')
-    df['Processing_Days'] = (df['Decision_Date'] - df['Valid_Date']).dt.days
     
-    df['Status'] = df['Status'].fillna('Unknown')
-    df['Status_Category'] = df['Status'].apply(categorize_status)
-    df['Proposal_Type'] = df['Proposal'].apply(extract_proposal_type)
-    df['Is_Residential'] = df['Proposal'].apply(lambda x: 'dwelling' in str(x).lower() or 'residential' in str(x).lower() or 'house' in str(x).lower() or 'flat' in str(x).lower())
-    df['Is_Commercial'] = df['Proposal'].apply(lambda x: 'commercial' in str(x).lower() or 'retail' in str(x).lower() or 'office' in str(x).lower())
-    df['Is_Mixed_Use'] = df['Is_Residential'] & df['Is_Commercial']
-    df['Unit_Count'] = df['Proposal'].apply(extract_units)
+    # Debug: Show what columns we actually have
+    st.sidebar.write("📋 Available columns:")
+    for col in df.columns[:10]:  # Show first 10
+        st.sidebar.caption(f"  - {col}")
+    
+    # Map column names to what we need (handle variations)
+    column_mapping = {
+        'Valid_Date': 'Valid_Date',
+        'ValidDate': 'Valid_Date',
+        'valid_date': 'Valid_Date',
+        'Decision_Date': 'Decision_Date',
+        'DecisionDate': 'Decision_Date',
+        'decision_date': 'Decision_Date',
+        'Run_Date': 'Run_Date',
+        'RunDate': 'Run_Date',
+        'run_date': 'Run_Date',
+    }
+    
+    # Try to find the right columns
+    for old_name, new_name in column_mapping.items():
+        if old_name in df.columns and new_name not in df.columns:
+            df[new_name] = df[old_name]
+    
+    # Parse dates if they exist
+    if 'Valid_Date' in df.columns:
+        df['Valid_Date'] = pd.to_datetime(df['Valid_Date'], errors='coerce')
+    if 'Decision_Date' in df.columns:
+        df['Decision_Date'] = pd.to_datetime(df['Decision_Date'], errors='coerce')
+    if 'Run_Date' in df.columns:
+        df['Run_Date'] = pd.to_datetime(df['Run_Date'], errors='coerce')
+    
+    # Calculate processing time if possible
+    if 'Valid_Date' in df.columns and 'Decision_Date' in df.columns:
+        df['Processing_Days'] = (df['Decision_Date'] - df['Valid_Date']).dt.days
+    else:
+        df['Processing_Days'] = None
+    
+    # Status handling
+    if 'Status' in df.columns:
+        df['Status'] = df['Status'].fillna('Unknown')
+        df['Status_Category'] = df['Status'].apply(categorize_status)
+    else:
+        df['Status'] = 'Unknown'
+        df['Status_Category'] = 'Unknown'
+    
+    # Proposal analysis
+    if 'Proposal' in df.columns:
+        df['Proposal_Type'] = df['Proposal'].apply(extract_proposal_type)
+        df['Is_Residential'] = df['Proposal'].apply(lambda x: 'dwelling' in str(x).lower() or 'residential' in str(x).lower() or 'house' in str(x).lower() or 'flat' in str(x).lower())
+        df['Is_Commercial'] = df['Proposal'].apply(lambda x: 'commercial' in str(x).lower() or 'retail' in str(x).lower() or 'office' in str(x).lower())
+        df['Is_Mixed_Use'] = df['Is_Residential'] & df['Is_Commercial']
+        df['Unit_Count'] = df['Proposal'].apply(extract_units)
+    else:
+        df['Proposal_Type'] = 'Unknown'
+        df['Is_Residential'] = False
+        df['Is_Commercial'] = False
+        df['Is_Mixed_Use'] = False
+        df['Unit_Count'] = 0
+    
     df['Value_Score'] = df.apply(calc_value_score, axis=1)
     
-    df['Application_Month'] = df['Valid_Date'].dt.to_period('M')
-    df['Application_Quarter'] = df['Valid_Date'].dt.to_period('Q')
-    df['Month_Name'] = df['Valid_Date'].dt.month_name()
+    # Time analysis
+    if 'Valid_Date' in df.columns:
+        df['Application_Month'] = df['Valid_Date'].dt.to_period('M')
+        df['Application_Quarter'] = df['Valid_Date'].dt.to_period('Q')
+        df['Month_Name'] = df['Valid_Date'].dt.month_name()
     
     return df
 
