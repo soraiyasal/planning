@@ -59,6 +59,8 @@ def load_from_google_sheets():
         return None
     try:
         SPREADSHEET_ID = "1rWZAD_Oy_tuypTYgTFaHClC9keg5cX0VJhUjQtk-LOw"
+        SHEET_NAME = "Planning_Applications"  # Specify your sheet name here
+        
         if "gcp_service_account" not in st.secrets:
             return None
         credentials = service_account.Credentials.from_service_account_info(
@@ -66,20 +68,20 @@ def load_from_google_sheets():
             scopes=['https://www.googleapis.com/auth/spreadsheets.readonly']
         )
         service = build('sheets', 'v4', credentials=credentials)
-        spreadsheet = service.spreadsheets().get(spreadsheetId=SPREADSHEET_ID).execute()
-        sheets = [s['properties']['title'] for s in spreadsheet.get('sheets', [])]
-        for sheet_name in sheets:
-            try:
-                result = service.spreadsheets().values().get(
-                    spreadsheetId=SPREADSHEET_ID, range=sheet_name
-                ).execute()
-                values = result.get('values', [])
-                if values and len(values) > 1:
-                    st.sidebar.success(f"✅ Loaded {len(values)-1:,} applications")
-                    return pd.DataFrame(values[1:], columns=values[0])
-            except:
-                continue
-        return None
+        
+        # Read from the specific sheet
+        result = service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID, range=SHEET_NAME
+        ).execute()
+        values = result.get('values', [])
+        
+        if values and len(values) > 1:
+            st.sidebar.success(f"✅ Loaded {len(values)-1:,} applications from {SHEET_NAME}")
+            return pd.DataFrame(values[1:], columns=values[0])
+        else:
+            st.warning(f"No data found in sheet: {SHEET_NAME}")
+            return None
+            
     except Exception as e:
         st.error(f"Google Sheets error: {str(e)}")
         return None
