@@ -76,8 +76,19 @@ def load_from_google_sheets():
         values = result.get('values', [])
         
         if values and len(values) > 1:
-            st.sidebar.success(f"✅ Loaded {len(values)-1:,} applications from {SHEET_NAME}")
-            return pd.DataFrame(values[1:], columns=values[0])
+            # Get header row
+            headers = values[0]
+            num_cols = len(headers)
+            
+            # Pad all data rows to match header length
+            data_rows = []
+            for row in values[1:]:
+                # Pad row with empty strings if it's shorter than headers
+                padded_row = row + [''] * (num_cols - len(row))
+                data_rows.append(padded_row)
+            
+            st.sidebar.success(f"✅ Loaded {len(data_rows):,} applications from {SHEET_NAME}")
+            return pd.DataFrame(data_rows, columns=headers)
         else:
             st.warning(f"No data found in sheet: {SHEET_NAME}")
             return None
