@@ -566,7 +566,7 @@ def show_executive_summary(df, base_rate):
     type_perf['Approval_Rate'] = (type_perf['Status_Category']/type_perf['App_Ref']*100)
     best_types = type_perf[type_perf['App_Ref']>=10].sort_values('Approval_Rate', ascending=False).head(3)
     
-    if len(best_types) > 0:
+    if len(best_types) >= 3:
         st.markdown(f"""
         <div class='insight-card'>
             <h3>🏗️ Priority 3: Best Development Types</h3>
@@ -574,6 +574,19 @@ def show_executive_summary(df, base_rate):
             <p>1. {best_types.index[0]}: {best_types['Approval_Rate'].values[0]:.0f}% approval</p>
             <p>2. {best_types.index[1]}: {best_types['Approval_Rate'].values[1]:.0f}% approval</p>
             <p>3. {best_types.index[2]}: {best_types['Approval_Rate'].values[2]:.0f}% approval</p>
+            <p><strong>Action:</strong> Prioritize {best_types.index[0].lower()} for best returns.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    elif len(best_types) >= 1:
+        types_list = []
+        for i in range(len(best_types)):
+            types_list.append(f"{i+1}. {best_types.index[i]}: {best_types['Approval_Rate'].values[i]:.0f}% approval")
+        
+        st.markdown(f"""
+        <div class='insight-card'>
+            <h3>🏗️ Priority 3: Best Development Types</h3>
+            <p><strong>Highest Success:</strong></p>
+            <p>{'<br>'.join(types_list)}</p>
             <p><strong>Action:</strong> Prioritize {best_types.index[0].lower()} for best returns.</p>
         </div>
         """, unsafe_allow_html=True)
